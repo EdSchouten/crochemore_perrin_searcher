@@ -49,7 +49,7 @@ private:
   // less-than predicate.
   class equal_to {
   public:
-    equal_to(LessPredicate less) : less_(less) {}
+    constexpr equal_to(LessPredicate less) : less_(less) {}
 
     template <typename T>
     constexpr bool operator()(const T &lhs, const T &rhs) const {
@@ -64,7 +64,7 @@ private:
   // existing less-than predicate.
   class greater {
   public:
-    greater(LessPredicate less) : less_(less) {}
+    constexpr greater(LessPredicate less) : less_(less) {}
 
     template <typename T>
     constexpr bool operator()(const T &lhs, const T &rhs) const {
@@ -85,8 +85,8 @@ private:
   // Maximal-Suffix() algorithm from figure 17, used to compute the
   // values of l_ and p_.
   template <typename Predicate>
-  static std::pair<xpos, xpos> maximal_suffix(PatternIterator x, xpos n,
-                                              Predicate pred) {
+  static constexpr std::pair<xpos, xpos>
+  maximal_suffix(PatternIterator x, xpos n, Predicate pred) {
     xpos i = 0, j = 1, k = 0, p = 1;
     while (j + k < n) {
       const auto &a = x[j + k];
@@ -111,19 +111,26 @@ private:
 
 public:
   // Small-Period() algorithm from figure 19.
-  crochemore_perrin_searcher(PatternIterator x, PatternIterator x_end,
-                             LessPredicate less = LessPredicate())
+  constexpr crochemore_perrin_searcher(PatternIterator x, PatternIterator x_end,
+                                       LessPredicate less = LessPredicate())
       : x_(x), n_(x_end - x), equal_to_(less) {
     auto s = std::max(maximal_suffix(x_, n_, less),
                       maximal_suffix(x_, n_, greater(less)));
     l_ = s.first;
     p_ = s.second;
-    is_periodic_ = std::equal(x_, x_ + l_, x_ + p_, equal_to_);
+
+    is_periodic_ = true;
+    for (xpos i = 0; i < l_; ++i) {
+      if (!equal_to_(x_[i], x_[p_ + i])) {
+        is_periodic_ = false;
+        break;
+      }
+    }
   }
 
   template <class DataIterator>
-  std::pair<DataIterator, DataIterator> operator()(DataIterator t,
-                                                   DataIterator t_end) const {
+  constexpr std::pair<DataIterator, DataIterator>
+  operator()(DataIterator t, DataIterator t_end) const {
     if (is_periodic_) {
       // Positions() algorithm from figure 8.
       xpos s = 0;
@@ -166,6 +173,20 @@ public:
     return {t_end, t_end};
   }
 };
+
+#ifdef __CloudABI__
+#include <string_view>
+
+static constexpr std::string_view x("Hello Hello");
+static constexpr crochemore_perrin_searcher<const char *> y(x.begin(),
+                                                            x.begin() + 5);
+
+static_assert(y(x.begin(), x.end()).first == x.begin());
+static_assert(y(x.begin(), x.end()).second == x.begin() + 5);
+
+static_assert(y(x.begin() + 1, x.end()).first == x.begin() + 6);
+static_assert(y(x.begin() + 1, x.end()).second == x.begin() + 11);
+#endif
 
 // Testing utility.
 
